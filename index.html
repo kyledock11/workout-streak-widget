@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workout Streak</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=Inter:wght@300;400&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #191919;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    .widget {
+      background: #191919;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .header-label {
+      font-family: 'Inter', sans-serif;
+      font-weight: 400;
+      font-size: 0.7rem;
+      color: #a09a92;
+      text-transform: uppercase;
+      letter-spacing: 0.25em;
+      text-align: left;
+    }
+
+    .streak-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 1rem;
+    }
+
+    .streak-main {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.15rem;
+    }
+
+    .streak-number {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 600;
+      font-size: 2.5rem;
+      color: #f2efea;
+      line-height: 1;
+    }
+
+    .streak-unit {
+      font-family: 'Inter', sans-serif;
+      font-weight: 300;
+      font-size: 0.7rem;
+      color: #6b6660;
+    }
+
+    .best-streak {
+      font-family: 'Inter', sans-serif;
+      font-weight: 300;
+      font-size: 0.7rem;
+      color: #8a857e;
+      padding-bottom: 0.25rem;
+    }
+
+    .week-view {
+      display: flex;
+      gap: 0.55rem;
+      align-items: flex-end;
+    }
+
+    .day-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .day-circle {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: transparent;
+      border: 1px solid #2a2725;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+
+    .day-circle.done {
+      background: #6ec07a;
+      border-color: #6ec07a;
+    }
+
+    .day-circle.today {
+      width: 20px;
+      height: 20px;
+      border: 1.5px solid rgba(110, 192, 122, 0.45);
+    }
+
+    .day-circle.today.done {
+      border-color: #6ec07a;
+    }
+
+    .day-label {
+      font-family: 'Inter', sans-serif;
+      font-weight: 300;
+      font-size: 0.5rem;
+      color: #5a5650;
+      text-transform: uppercase;
+    }
+
+    .weekly-stats {
+      font-family: 'Inter', sans-serif;
+      font-weight: 300;
+      font-size: 0.7rem;
+      color: #6b6660;
+    }
+
+    .log-btn {
+      display: inline-block;
+      width: 100%;
+      padding: 0.45rem 0.75rem;
+      background: rgba(110, 192, 122, 0.12);
+      border: 1px solid rgba(110, 192, 122, 0.2);
+      border-radius: 6px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 400;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #6ec07a;
+      cursor: pointer;
+      text-align: center;
+      transition: opacity 0.2s, background 0.2s;
+    }
+
+    .log-btn:hover:not(:disabled) {
+      background: rgba(110, 192, 122, 0.2);
+    }
+
+    .log-btn:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+  <div class="widget">
+    <div class="header-label">Workout Streak</div>
+
+    <div class="streak-row">
+      <div class="streak-main">
+        <span class="streak-number" id="streak-number">0</span>
+        <span class="streak-unit">days</span>
+      </div>
+      <span class="best-streak" id="best-streak">Best: 0 days</span>
+    </div>
+
+    <div class="week-view" id="week-view"></div>
+
+    <div class="weekly-stats" id="weekly-stats">0 workouts this week</div>
+
+    <button class="log-btn" id="log-btn" onclick="logWorkout()">Log Workout</button>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'workout_streak_data';
+    const DAY_ABBREVS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+    function toDateStr(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function getToday() {
+      return toDateStr(new Date());
+    }
+
+    function loadDates() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveDates(dates) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dates));
+    }
+
+    function calcStreak(dateSet, today) {
+      const todayDate = new Date(today + 'T00:00:00');
+      let streak = 0;
+      let cursor = new Date(todayDate);
+
+      // If today has no workout, start counting from yesterday
+      if (!dateSet.has(today)) {
+        cursor.setDate(cursor.getDate() - 1);
+      }
+
+      while (true) {
+        const ds = toDateStr(cursor);
+        if (dateSet.has(ds)) {
+          streak++;
+          cursor.setDate(cursor.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+
+      return streak;
+    }
+
+    function calcBestStreak(dates) {
+      if (dates.length === 0) return 0;
+      const sorted = [...dates].sort();
+      let best = 1;
+      let current = 1;
+
+      for (let i = 1; i < sorted.length; i++) {
+        const prev = new Date(sorted[i - 1] + 'T00:00:00');
+        const curr = new Date(sorted[i] + 'T00:00:00');
+        const diff = (curr - prev) / (1000 * 60 * 60 * 24);
+        if (diff === 1) {
+          current++;
+          if (current > best) best = current;
+        } else if (diff > 1) {
+          current = 1;
+        }
+      }
+
+      return best;
+    }
+
+    function getLast7Days(today) {
+      const days = [];
+      const todayDate = new Date(today + 'T00:00:00');
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(todayDate);
+        d.setDate(d.getDate() - i);
+        days.push({
+          dateStr: toDateStr(d),
+          dayOfWeek: d.getDay(),
+          isToday: i === 0
+        });
+      }
+      return days;
+    }
+
+    function render() {
+      const today = getToday();
+      const dates = loadDates();
+      const dateSet = new Set(dates);
+
+      const streak = calcStreak(dateSet, today);
+      const best = calcBestStreak(dates);
+
+      document.getElementById('streak-number').textContent = streak;
+      document.getElementById('best-streak').textContent = `Best: ${best} days`;
+
+      const last7 = getLast7Days(today);
+
+      const weekView = document.getElementById('week-view');
+      weekView.innerHTML = '';
+
+      let weekCount = 0;
+      last7.forEach(day => {
+        const done = dateSet.has(day.dateStr);
+        if (done) weekCount++;
+
+        const col = document.createElement('div');
+        col.className = 'day-col';
+
+        const circle = document.createElement('div');
+        circle.className = 'day-circle' + (done ? ' done' : '') + (day.isToday ? ' today' : '');
+
+        const label = document.createElement('div');
+        label.className = 'day-label';
+        label.textContent = DAY_ABBREVS[day.dayOfWeek];
+
+        col.appendChild(circle);
+        col.appendChild(label);
+        weekView.appendChild(col);
+      });
+
+      document.getElementById('weekly-stats').textContent =
+        `${weekCount} workout${weekCount !== 1 ? 's' : ''} this week`;
+
+      const btn = document.getElementById('log-btn');
+      const alreadyLogged = dateSet.has(today);
+      if (alreadyLogged) {
+        btn.textContent = 'Logged ✓';
+        btn.disabled = true;
+      } else {
+        btn.textContent = 'Log Workout';
+        btn.disabled = false;
+      }
+    }
+
+    function logWorkout() {
+      const today = getToday();
+      const dates = loadDates();
+      const dateSet = new Set(dates);
+      if (!dateSet.has(today)) {
+        dates.push(today);
+        saveDates(dates);
+      }
+      render();
+    }
+
+    render();
+  </script>
+</body>
+</html>
